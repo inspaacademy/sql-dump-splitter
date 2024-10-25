@@ -1,21 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-'''
-Changes in 1.1
-
-Extracting Names: The extract_name function uses regular expressions to find and return the name of
-the table, view, function, or procedure being created in the SQL script.
-
-File Naming: The script now names output files based on the extracted name. If no name can be extracted,
-it falls back to a default naming convention (file_{file_count}).
-
-Updated SQL Conditions: Additional conditions for views, functions, and procedures have been included
-in the DEFAULT_SQL_CONDITIONS.
-''' 
-
 __author__ = "Davyd Maker"
-__version__ = "1.1"
+__version__ = "1.2"
 
 import os
 import argparse
@@ -84,15 +71,19 @@ def process_file(input_file_path, output_dir, trigger_count, ignore_blank_lines,
                 split, condition_hit_count = should_split(processed_line, sql_conditions, condition_hit_count, trigger_count)
                 
                 if split:
-                    if current_file_name and current_content:
+                    if current_content:
+                        # Save the current content to the previous file name
                         save_file(current_content, output_dir, current_file_name)
                         file_count += 1
+                    
+                    # Set the new file name based on the extracted name
                     current_file_name = name if name else f"file_{file_count}"  # Fallback if name extraction fails
-                    current_content = []
-                    condition_hit_count = 0
-                
+                    current_content = []  # Reset current content for the new file
+                    condition_hit_count = 0  # Reset hit count
+
                 current_content.append(processed_line)
 
+            # Save any remaining content in the last file
             if current_content and current_file_name:
                 save_file(current_content, output_dir, current_file_name)
                 file_count += 1
