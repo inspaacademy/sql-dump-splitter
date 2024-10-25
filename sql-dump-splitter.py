@@ -1,18 +1,48 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+'''
+Changes in 1.1
+
+Extracting Names: The extract_name function uses regular expressions to find and return the name of
+the table, view, function, or procedure being created in the SQL script.
+
+File Naming: The script now names output files based on the extracted name. If no name can be extracted,
+it falls back to a default naming convention (file_{file_count}).
+
+Updated SQL Conditions: Additional conditions for views, functions, and procedures have been included
+in the DEFAULT_SQL_CONDITIONS.
+''' 
+
 __author__ = "Davyd Maker"
-__version__ = "1.0"
+__version__ = "1.1"
 
 import os
 import argparse
 import time
+import re
 
-DEFAULT_SQL_CONDITIONS = ["DROP TABLE", "CREATE TABLE IF NOT EXISTS"]
+DEFAULT_SQL_CONDITIONS = ["DROP TABLE", "CREATE TABLE IF NOT EXISTS", "CREATE VIEW", "CREATE FUNCTION", "CREATE PROCEDURE"]
 
-def save_file(content, directory, file_index):
+def extract_name(line):
+    # Regex patterns to match table/view/function/procedure names
+    patterns = [
+        r'CREATE TABLE (\w+)',  # Match CREATE TABLE statements
+        r'CREATE VIEW (\w+)',   # Match CREATE VIEW statements
+        r'CREATE FUNCTION (\w+)',  # Match CREATE FUNCTION statements
+        r'CREATE PROCEDURE (\w+)',  # Match CREATE PROCEDURE statements
+        r'DROP TABLE (\w+)',  # Match DROP TABLE statements
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, line)
+        if match:
+            return match.group(1)
+    return None
+
+def save_file(content, directory, file_name):
     try:
-        file_path = os.path.join(directory, f'{file_index}.sql')
+        file_path = os.path.join(directory, f'{file_name}.sql')
         with open(file_path, 'w', encoding='utf-8') as file:
             file.write(''.join(content))
     except IOError as e:
@@ -37,29 +67,36 @@ def handle_line(line, ignore_blank_lines):
 def process_file(input_file_path, output_dir, trigger_count, ignore_blank_lines, sql_conditions):
     prepare_directory(output_dir)
     file_count = 0
+    current_content = []
+    current_file_name = None
+    condition_hit_count = 0
 
     start_time = time.time()
+    
     try:
         with open(input_file_path, 'r', encoding='utf-8') as file:
-            current_content = []
-            condition_hit_count = 0
-
             for line in file:
                 processed_line = handle_line(line, ignore_blank_lines)
                 if processed_line is None:
                     continue
 
+                name = extract_name(processed_line)
                 split, condition_hit_count = should_split(processed_line, sql_conditions, condition_hit_count, trigger_count)
+                
                 if split:
-                    save_file(current_content, output_dir, file_count)
-                    file_count += 1
+                    if current_file_name and current_content:
+                        save_file(current_content, output_dir, current_file_name)
+                        file_count += 1
+                    current_file_name = name if name else f"file_{file_count}"  # Fallback if name extraction fails
                     current_content = []
                     condition_hit_count = 0
+                
                 current_content.append(processed_line)
 
-            if current_content:
-                save_file(current_content, output_dir, file_count)
+            if current_content and current_file_name:
+                save_file(current_content, output_dir, current_file_name)
                 file_count += 1
+                
     except Exception as e:
         print(f"Error reading file {input_file_path}: {e}")
 
